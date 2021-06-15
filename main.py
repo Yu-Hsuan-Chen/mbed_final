@@ -14,9 +14,13 @@ clock = time.clock()
 uart = pyb.UART(3,9600,timeout_char=1000)
 uart.init(9600,bits=8,parity = None, stop=1, timeout_char=1000)
 
-## LED
-led = pyb.LED(1)
-led.off()
+## LED setting (1: red, 2: green, 3: blue, 4: IR)
+led_s = pyb.LED(1) #start / can receive massage from mbed
+led_s.on()
+led_x = pyb.LED(2) #xbee error
+led_x.off()
+led_c = pyb.LED(3) #close
+led_c.off()
 
 ## tflite model
 net = "trained.tflite"
@@ -30,7 +34,7 @@ c_y = 120 * 0.5 # find_apriltags defaults to this if not set (the image.h * 0.5)
 
 ## car parameters
 SPEED = 50
-GO = False
+
 ## map parameter
 TAG_X = 1000
 TAG_Y = 1000
@@ -39,6 +43,69 @@ TAG_H = 0
 
 clock.tick()
 
+
+## PART 0
+def initialization(mode):
+    SPEED = 50
+    TAG_X = 1000
+    TAG_Y = 1000
+    TAG_W = 0
+    TAG_H = 0
+    led_s.on()
+    time.sleep(0.5)
+    led_s.off()
+    time.sleep(0.5)
+    led_s.on()
+    time.sleep(0.5)
+    led_s.off()
+    time.sleep(0.5)
+    led_s.on()
+    time.sleep(0.5)
+    led_s.off()
+
+def close():
+    led_s.off()
+    led_c.on()
+    time.sleep(0.5)
+    led_c.off()
+    time.sleep(0.5)
+    led_c.on()
+    time.sleep(0.5)
+    led_c.off()
+    time.sleep(0.5)
+    led_c.on()
+    time.sleep(0.5)
+    led_c.off()
+
+## PART 1
+def follow_map():
+    tmp = 0
+    while(tmp < 3):
+        img = sensor.snapshot()
+        TAG_X = 1000
+        TAG_Y = 1000
+        for tag in img.find_apriltags(fx=f_x, fy=f_y, cx=c_x, cy=c_y): # defaults to TAG36H11
+            img.draw_rectangle(tag.rect(), color = (255, 0, 0))
+            img.draw_cross(tag.cx(), tag.cy(), color = (0, 255, 0))
+            TAG_X = tag.cx()
+            TAG_Y = tag.cy()
+            TAG_W = tag.w()
+            TAG_H = tag.h()
+            #print(TAG_X, TAG_Y)
+            #print(TAG_W*TAG_H)
+        if TAG_Y>105:
+            #print("GO")
+            uart.write(("/goStraight/run %d 1 1 \n" % SPEED).encode())
+        else:
+            #print("TURN")
+            uart.write(("/stop/run \n").encode())
+            uart.write(("/turn/run %d -0.2\n" % SPEED).encode())
+            time.sleep(1.95)
+            tmp = tmp + 1
+    time.sleep(0.3)
+    uart.write(("/stop/run \n").encode())
+
+## PART2
 def clockwise():
     #print("turn left")
     uart.write(("/turn/run %d 0.2\n" % SPEED).encode())
@@ -88,62 +155,7 @@ def counterclockwise():
     uart.write(("/stop/run \n").encode())
     #time.sleep(1)
 
-
-### PART 0 : initialization
-buf = []
-
-while(1):
-    buf = uart.read(13)
-    start = str(buf)
-    if "start" in start:
-        GO = True
-        break
-    elif "xbee error" in start:
-        print("xbee error")
-        break
-
-if GO == True:
-    led.on()
-    time.sleep(0.5)
-    led.off()
-    time.sleep(0.5)
-    led.on()
-    time.sleep(0.5)
-    led.off()
-    time.sleep(0.5)
-    led.on()
-    time.sleep(0.5)
-    led.off()
-    print("START")
-
-    ## PART1 : follow map
-    tmp = 0
-    while(tmp < 3):
-        img = sensor.snapshot()
-        TAG_X = 1000
-        TAG_Y = 1000
-        for tag in img.find_apriltags(fx=f_x, fy=f_y, cx=c_x, cy=c_y): # defaults to TAG36H11
-            img.draw_rectangle(tag.rect(), color = (255, 0, 0))
-            img.draw_cross(tag.cx(), tag.cy(), color = (0, 255, 0))
-            TAG_X = tag.cx()
-            TAG_Y = tag.cy()
-            TAG_W = tag.w()
-            TAG_H = tag.h()
-            #print(TAG_X, TAG_Y)
-            #print(TAG_W*TAG_H)
-
-        if TAG_Y>105:
-            #print("GO")
-            uart.write(("/goStraight/run %d 1 1 \n" % SPEED).encode())
-        else:
-            #print("TURN")
-            uart.write(("/stop/run \n").encode())
-            uart.write(("/turn/run %d -0.2\n" % SPEED).encode())
-            time.sleep(1.95)
-            tmp = tmp + 1
-
-    ### PART2 : classify pic
-    time.sleep(0.3)
+def classify_pic():
     uart.write(("/goStraight/run %d 1 1 \n" % SPEED).encode())
     time.sleep(1.8)
     uart.write(("/stop/run \n").encode())
@@ -160,14 +172,13 @@ if GO == True:
         #for i in range(len(predictions_list)):
             #print("%s = %f" % (predictions_list[i][0], predictions_list[i][1]))
             #print("prediction: %s" % predictions_list[obj.output().index(max(obj.output()))][0])
-
     if predictions_list[obj.output().index(max(obj.output()))][0] == "cat":
         clockwise()
     else:
         counterclockwise()
 
-
-    ## PART3 : AprilTag calibration
+## PART3
+def AprilTag_calibration():
     uart.write(("/goStraight/run %d 1 1 \n" % SPEED).encode())
     time.sleep(6)
     uart.write(("/stop/run \n").encode())
@@ -191,15 +202,70 @@ if GO == True:
                     uart.write(("/goStraight/run %d 1 1 \n" % SPEED).encode())
                 elif tag.cx()<=75:
                     turn = SPEED
-                    factor = max(1-(75-tag.cx())/24, 0.1)
+                    factor = max(1-(75-tag.cx())/23, 0.1)
                     #print("turn left", tag.cx(), turn, factor)
                     uart.write(("/turn/run %d %f \n" % (turn, factor)).encode())
                 elif tag.cx()>=95:
                     turn = SPEED
-                    factor = min((tag.cx()-85)/24, 1)
+                    factor = min((tag.cx()-85)/23, 1)
                     #print("turn right", tag.cx(), turn, factor)
                     uart.write(("/turn/run %d %f \n" % (turn, -factor)).encode())
                 else:
                     print("other: %f", degrees(tag.y_rotation()))
+
+
+while(1):
+    buf = []
+    buf = uart.read(20)
+    start = str(buf)
+    if "all" in start:
+        mode = "ALL"
+        initialization(mode)
+        follow_map()
+        classify_pic()
+        AprilTag_calibration()
+        print("all done")
+        uart.write(("Done\n").encode())
+        led_s.on()
+    elif "following" in start:
+        mode = "FOLLOW LINE"
+        initialization(mode)
+        follow_map()
+        print("follow done")
+        uart.write(("Done\n").encode())
+        led_s.on()
+    elif "classification" in start:
+        mode = "CLASSIFICATION"
+        initialization(mode)
+        classify_pic()
+        print("class done")
+        uart.write(("Done\n").encode())
+        led_s.on()
+    elif "parking" in start:
+        mode = "PARKING"
+        initialization(mode)
+        AprilTag_calibration()
+        print("parking done")
+        uart.write(("Done\n").encode())
+        led_s.on()
+    elif "finish" in start:
+        close()
+        break
+    elif "xbee error" in start:
+        led_x.on()
+        time.sleep(0.5)
+        led_x.off()
+        time.sleep(0.5)
+        led_x.on()
+        time.sleep(0.5)
+        led_x.off()
+        time.sleep(0.5)
+        led_x.on()
+        time.sleep(0.5)
+        led_x.off()
+        print("xbee error")
+        break
+
+
 
 
