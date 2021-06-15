@@ -4,10 +4,6 @@ import sys,tty,termios
 
 s = serial.Serial(sys.argv[1])
 
-import time
-import serial
-import sys,tty,termios
-
 
 class _Getch:
     def __call__(self):
@@ -71,8 +67,21 @@ if len(sys.argv) < 1:
 #     i = 0
 
 
-mode = input("Choose mode: (normal/sport):")
-if mode == "normal":
-    s.write("normal\n".encode())
-else:
-    s.write("sport\n".encode())
+
+
+tmp = True
+while(tmp):
+    mode = input("Enter \"all\", \"following\", \"classification\" or \"parking\" to start the program : ( Enter \"finish\" to close the program ) \n")
+    if mode == "all":
+        s.write("all\n".encode())
+    elif mode == "following":
+        s.write("following\n".encode())
+    elif mode == "classification":
+        s.write("classification\n".encode())
+    elif mode == "parking":
+        s.write("parking\n".encode())
+    elif mode == "finish":
+        s.write("finish\n".encode())
+        tmp = False
+    else:
+        print("INPUT ERROR! TRY AGAIN! \n")
