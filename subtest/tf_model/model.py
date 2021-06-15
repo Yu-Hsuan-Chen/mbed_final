@@ -15,18 +15,17 @@ labels = [line.rstrip('\n') for line in open("labels.txt")]
 
 clock = time.clock()
 while(True):
+
     clock.tick()
-
     img = sensor.snapshot()
+    for obj in tf.classify(net, img, min_scale=1.0, scale_mul=0.8, x_overlap=0.5, y_overlap=0.5, roi=(25, 20, 110, 110)):
+        img.draw_rectangle(obj.rect(), color = (255, 0, 0))
 
-    # default settings just do one detection... change them to search the image...
-    for obj in tf.classify(net, img, min_scale=1.0, scale_mul=0.8, x_overlap=0.5, y_overlap=0.5):
-        print("**********\nPredictions at [x=%d,y=%d,w=%d,h=%d]" % obj.rect())
-        img.draw_rectangle(obj.rect())
-        # This combines the labels and confidence values into a list of tuples
         predictions_list = list(zip(labels, obj.output()))
-        img.draw_string(obj.x()+3, obj.y()-1, labels[obj.output().index(max(obj.output()))], mono_space = False)
+        img.draw_string(obj.x()+3, obj.y()-3, labels[obj.output().index(max(obj.output()))], mono_space = False, scale = 2, color = (255,0,0))
+        #time.sleep(1)
         for i in range(len(predictions_list)):
             print("%s = %f" % (predictions_list[i][0], predictions_list[i][1]))
-
+            print("prediction: %s" % predictions_list[obj.output().index(max(obj.output()))][0])
     print(clock.fps(), "fps")
+
